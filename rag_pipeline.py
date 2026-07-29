@@ -17,13 +17,13 @@ load_dotenv()
 VECTOR_STORE_PATH = "vector_store"
 DATA_PATH = "data/college_faq.pdf"
 
-# ── Embedding Model ─────────────────────────
+# Embedding Model
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
     model_kwargs={"local_files_only": True}
 )
 
-# ── Build Vector Store ──────────────────────
+# Build Vector Store
 def build_vector_store():
     print("📄 Loading documents...")
 
@@ -45,7 +45,7 @@ def build_vector_store():
     return db
 
 
-# ── Load Vector Store ───────────────────────
+# Load Vector Store
 def load_vector_store():
     if os.path.exists(VECTOR_STORE_PATH) and os.path.exists(os.path.join(VECTOR_STORE_PATH, "index.faiss")):
         print("📂 Loading existing vector store...")
@@ -59,14 +59,14 @@ def load_vector_store():
     return build_vector_store()
 
 
-# ── LLM (Groq) ──────────────────────────────
+# LLM (Groq)
 llm = ChatGroq(
     model="llama-3.1-8b-instant",
     api_key=os.getenv("GROQ_API_KEY"),
     temperature=0.3
 )
 
-# ── Prompt (IMPROVED 🔥) ────────────────────
+# Prompt
 prompt = PromptTemplate.from_template("""
 You are a helpful AI assistant for Annamacharya University (AITS Rajampet).
 
@@ -80,67 +80,52 @@ RULES:
 
 Context:
 {context}
-
 Question: {question}
-
 Answer:
 """)
-
-# ── Format Docs ─────────────────────────────
+# Format Docs
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
-
-# ── Build QA Chain ──────────────────────────
+# Build QA Chain
 def get_qa_chain():
     db = load_vector_store()
-
     retriever = db.as_retriever(search_kwargs={"k": 6})
-
     chain = (
         {"context": retriever | format_docs, "question": RunnablePassthrough()}
         | prompt
         | llm
         | StrOutputParser()
     )
-
     return chain
 
-
-# ── Lazy Init ───────────────────────────────
+# Lazy Init
 _qa_chain = None
 
-
-# ── Main Function ───────────────────────────
+# Main Function
 def get_answer(question: str) -> dict:
     global _qa_chain
-
     if _qa_chain is None:
         print("🔧 Initializing QA chain...")
         _qa_chain = get_qa_chain()
         print("✅ QA chain ready!")
-
     print(f"👉 Question: {question}")
 
-    # 🔥 Basic fallback (fast response)
+    # Basic fallback (fast response)
     if "annamacharya university" in question:
         return {
             "answer": "Annamacharya University is a private university located in Rajampet, Andhra Pradesh, offering courses in engineering, management, sciences, and more.",
             "sources": []
         }
-
     try:
         answer = _qa_chain.invoke(question)
-
         if not answer or len(answer.strip()) < 10:
             answer = "I’m not fully sure yet 🤔. You can ask about admissions, courses, fees, or campus facilities."
 
     except Exception as e:
         print(f"❌ LLM Error: {e}")
         answer = "Something went wrong while fetching the answer."
-
     print(f"🤖 Answer: {answer}")
-
     return {
         "answer": answer,
         "sources": []
